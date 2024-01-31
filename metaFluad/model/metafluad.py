@@ -25,9 +25,6 @@ from torch_geometric.data import Data
 from sklearn.metrics import mean_squared_error, r2_score
 from torch_geometric.utils.convert import from_networkx
 import random
-from torch.nn.functional import cosine_similarity
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.metrics import matthews_corrcoef
 
 
 # ----------
@@ -224,12 +221,79 @@ class SE_CNN(nn.Module):
         return out
 
 
+class GCN(torch.nn.Module):
+    def __init__(self, in_channel, hidden_channels, out_channel):
+        super(GCN, self).__init__()
+        self.conv1 = GCNConv(in_channel, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channel)
+        self.fc = nn.Linear(in_channel, out_channel)
+        self.dropout = nn.Dropout(p=0.2)
 
-# 输出维度将会是num_heads*out_channel，多头的拼接方式默认是concat,设置False就是取平均值
-# 在PyTorch Geometric (PyG)库中，GATConv的concatenation和average两种方式输出的维度是相同的，
-# 这是因为在PyG实现中，无论是哪种方式，
-# 都是通过将每个注意力头得到的特征向量按照通道方向进行拼接或求平均，
-# 然后再进行线性变换和LeakyReLU激函数处理得到输出特征向量
+    def forward(self, x, edge_index):
+        res = self.fc(x)
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x = self.dropout(x)
+        x = self.conv2(x, edge_index)
+        return F.relu(x+res)
+
+class AGNNModel(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers):
+        super(AGNNModel, self).__init__()
+        self.conv1 = AGNNConv(requires_grad=True)
+
+        self.convs = nn.ModuleList([
+            AGNNConv(hidden_channels, hidden_channels) for _ in range(num_layers - 2)
+        ])
+
+        self.conv_out = AGNNConv(hidden_channels, out_channels)
+        self.lin = nn.Linear(in_channels, out_channels)
+
+    def forward(self, x, edge_index):
+        res = self.lin(x)
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        for conv in self.convs:
+            x = conv(x, edge_index)
+        x = self.conv_out(x, edge_index)
+        x = F.relu(x + res)
+        return x
+
+class RESGATv2(nn.Module):
+    def __init__(self, in_features, hidden_features, out_features, num_layers, num_heads, dropout=0.3):
+        super(RESGATv2, self).__init__()
+        self.dropout = dropout
+
+        self.gat_layers = nn.ModuleList()
+        # 第一层GAT
+        self.gat_layers.append(GATv2Conv(in_features, hidden_features, heads=num_heads[0]))
+        # 中间层GAT
+        for l in range(1, num_layers - 1):
+            self.gat_layers.append(GATv2Conv(hidden_features * num_heads[l - 1], hidden_features, heads=num_heads[l]))
+        # 输出层GAT
+        self.gat_layers.append(GATv2Conv(hidden_features * num_heads[-2], out_features, heads=num_heads[-1]))
+
+        self.residual_layer = nn.Linear(in_features, out_features * num_heads[-1])
+
+    def forward(self, x, edge_index):
+        # x = data.x
+        x_res = self.residual_layer(x)
+        for layer in self.gat_layers[:-1]:
+            x = layer(x, edge_index).flatten(1)
+            x = F.elu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        # 最后一层GAT
+        x = self.gat_layers[-1](x, edge_index).flatten(1)
+        x = F.elu(x)
+        # x = F.dropout(x, p=self.dropout, training=self.training)
+        # print(x.shape)
+        # 残差连接
+        # x_res = self.residual_layer(x)
+        # print(x_res.shape)
+        x = F.relu(x + x_res)
+        return x
+
+
 class MultiGAT(torch.nn.Module):
     """ GATConv
     in_channels：输入特征的维度，即节点的特征维度；
@@ -570,25 +634,6 @@ def evaluate(model, data_evaluate):
                                                   torch.tensor(1).to(device), torch.tensor(0).to(device))
         predictions = output_binary_tensor.cpu().numpy().flatten()
         targets = data_evaluate_binary_tensor.cpu().numpy().flatten()
-        # 计算准确率
-        accuracy = round(accuracy_score(targets, predictions), 5)
-        # 计算精确度
-        precision = round(precision_score(targets, predictions), 5)
-        # 计算召回率
-        recall = round(recall_score(targets, predictions), 5)
-        # 计算F1值
-        f1 = round(f1_score(targets, predictions), 5)
-        # 打印结果
-        print("Accuracy:", accuracy)
-        print("Precision:", precision)
-        print("Recall:", recall)
-        print("F1 score:", f1)
-        mcc_score = matthews_corrcoef(targets, predictions)
-        print("(MCC) Score:", mcc_score)
-        # print("MCC:", f1)
-
-        # print(output.shape)
-        # print(data_evaluate.edge_weight.shape)
         decimal_places = 5
 
         evalue_loss_mae = F.l1_loss(output, data_evaluate.edge_weight)
@@ -604,12 +649,7 @@ def evaluate(model, data_evaluate):
         r2 = r2_score(edge_weight_cpu, output_cpu)
         # r2 = 0
 
-    return round(evalue_loss_mse.item(), 5), round(evalue_loss_mae.item(), 5), output, formatted_rmse, round(pcc,
-                                                                                                             5), formatted_std, round(
-        r2, 5)
-    # return round(evalue_loss_mse.item(), 5), round(evalue_loss_mae.item(), 5), output, formatted_rmse, round(pcc,
-    #                                                                                                          5), formatted_stdF
-
+    return round(evalue_loss_mse.item(), 5), round(evalue_loss_mae.item(), 5), output, formatted_rmse
 
 def train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_evaluate):
     model.train()
@@ -632,7 +672,7 @@ def train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_ev
             break
         if (i % 10 == 0):
             print("第{}轮".format(i))
-            evalue_loss_mse, evalue_loss_mae, output_evalue, rmse, pcc, std, r2 = evaluate(model, data_evaluate)
+            evalue_loss_mse, evalue_loss_mae, output_evalue, r2 = evaluate(model, data_evaluate)
             if evalue_loss_mse < best_loss:
                 best_loss = evalue_loss_mse
                 counter = 0  # 重置计数器
@@ -647,7 +687,6 @@ def train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_ev
             print("训练偏差： " + str(train_loss))
             print("MSE验证偏差： " + str(evalue_loss_mse))
             print("MAE验证偏差： " + str(evalue_loss_mae))
-            data = [evalue_loss_mse, evalue_loss_mae, output_evalue, rmse, pcc, std, r2]
         if (i % 200 == 0):
             print("打印模型返回值： " + str(output_train[:10].reshape(1, -1)))
             print("-----------------")
@@ -663,48 +702,22 @@ def test(model_save, data_test, model):
      # 设置模型为评估模式  需要冻结模型的前面层
 
     with torch.no_grad():
-        print(len(data_test.edge_weight))
-        print("data_test")
-        for item in data_test.edge_weight:
-            print(item.item(), end=',')
-        print("==")
 
         output, x = model_test(data_test)
         ###########
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        with open(f'./data/result/CSV/AH3N2节点嵌入_no_dropout{now}.csv', 'w', newline='') as file:
+        with open(f'./data/result/{now}.csv', 'w', newline='') as file:
             print(x.shape)
-            print("写入文件./data/result/CSV/节点嵌入.csv")
             writer = csv.writer(file)
             writer.writerows(x.tolist())
         file.close()
         ###########
-        print(len(output))
-        print("output")
         for item in output:
-            print(item.item(), end = ',')
+            print(item.item(), end=',')
 
 
         output = output.to(device)
-        threshold = torch.tensor(2.0).to(device)
-        # 将小于等于阈值的值设为4，大于等于阈值的值设为0
-        output_binary_tensor = torch.where(output <= threshold, torch.tensor(1).to(device), torch.tensor(0).to(device))
-        data_test_binary_tensor = torch.where(data_test.edge_weight.to(device) <= threshold,
-                                              torch.tensor(1).to(device), torch.tensor(0).to(device))
 
-        predictions = output_binary_tensor.cpu().numpy().flatten()
-        targets = data_test_binary_tensor.cpu().numpy().flatten()
-
-        # 计算准确率
-        accuracy = round(accuracy_score(targets, predictions), 5)
-        # 计算精确度
-        precision = round(precision_score(targets, predictions), 5)
-        # 计算召回率
-        recall = round(recall_score(targets, predictions), 5)
-        # 计算F1值
-        f1 = round(f1_score(targets, predictions), 5)
-
-        mcc_score = round(matthews_corrcoef(targets, predictions), 5)
 
         test_loss_mae = F.l1_loss(output, data_test.edge_weight)
         test_loss_mse = F.mse_loss(output, data_test.edge_weight)
@@ -723,30 +736,11 @@ def test(model_save, data_test, model):
         formatted_r2 = round(r2.item(), decimal_places)
         pcc = round(pcc, 5)
 
-        # 打印结果
-        print("===test result==")
-        print("测试数据在模型上表现情况")
-        print("test==={}".format(output[:20].reshape(1, -1)))
-        print('real==={}'.format(data_test.edge_weight[:20].reshape(1, -1)))
-        print("===定性结果===")
-        print("Accuracy:", accuracy)
-        print("Precision:", precision)
-        print("Recall:", recall)
-        print("F1 score:", f1)
-
-        print("Matthews Correlation Coefficient (MCC) Score:", mcc_score)
-        print("===定量结果===")
         std = round(np.std(edge_weight_cpu - output_cpu), 5)
         print("测试数据上的残差标准差是{}".format(std))
-        print("测试数据上的PCC{}:".format(pcc))
         print("测试数据上的MAE是{}".format(formatted_mae))
         print("测试数据上的MSE是{}".format(formatted_mse))
-        print("测试数据上的RMSE是{}".format(formatted_rmse))
         print("测试数据上的R2是{}".format(formatted_r2))
-        # PCC值的取值范围在-1到1之间，其值越接近于1表示两个变量之间的线性相关性越强，
-        # 而其值越接近于-1则表示两个变量之间的线性相关性越弱。
-        # 同时，P值表示PCC值的显著性水平，其值越小表示相关性越显著。
-        # print("测试数据上的PCC是{} ,p是{}".format(pcc, p_value))
         print("======")
 
         return test_loss_mse, test_loss_mae, r2
@@ -823,22 +817,12 @@ def main(keep_num_edge):
     epochs = 1601
     model = MetaFluAD()
     # 加载预训练模型的参数
-    # path = 'data/result/metalearn/AH5N1.pth'
-    # path = 'data/result/metalearn/AH3N2-2.pth'
-    # path = 'data/result/metalearn/AH5N1-new.pth'
-    # path = 'data/result/metalearn/BH1N1-1.pth'
-    # path = 'data/result/metalearn/AH3N2.pth'
-    # path = 'data/result/metalearn/AH1N1.pth'
-    # path = 'data/result/metalearn/12_5_1.pth'
-    # path = 'data/result/metalearn/11_30.pth'
-    # # path = 'data/result/metalearn/6_26.pth'
-    # path = 'data/result/model_parma/model_1.pth'
-    # # # #
-    # pretrained_dict = torch.load(path)
-    # model_dict = model.state_dict()  # 获取当前模型的state_dict
-    # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-    # model_dict.update(pretrained_dict)
-    # model.load_state_dict(model_dict)
+    path = 'data/result/metalearn/AH3N2.pth'
+    pretrained_dict = torch.load(path)
+    model_dict = model.state_dict()  # 获取当前模型的state_dict
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    model_dict.update(pretrained_dict)
+    model.load_state_dict(model_dict)
     model.to(device)
 
     printparm(model)
