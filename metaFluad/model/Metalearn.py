@@ -202,16 +202,7 @@ class SE_CNN(nn.Module):
 
 
 class MultiGAT(torch.nn.Module):
-    """ GATConv
-    in_channels：输入特征的维度，即节点的特征维度；
-    out_channels：输出特征的维度，即经过卷积后每个节点的特征维度；
-    heads：注意力机制中注意力头的数目，默认为 1；
-    concat：是否将每个头的输出拼接起来，默认为 True；
-    negative_slope：LeakyReLU 中负斜率的值，默认为 0.2；
-    dropout：在输出特征上应用 dropout 的概率，默认为 0；
-    bias：是否添加偏置，默认为 True；
-    **kwargs：其他参数，如指定用于计算注意力权重的函数等。
-    """
+
 
     def __init__(self, in_channels,
                  hidden_channels,
@@ -367,11 +358,10 @@ def meta_train_step(train_set, model, criterion, optimizer,
     weights_original = deepcopy(model.state_dict())
     new_weights = []
     for _ in range(len(train_set)):
-        # 获得dataloader, sampled_tasks是从train_set个任务中采样meta_batch_size个任务
+
         sampled_tasks = np.random.choice(len(train_set), meta_batch_size, replace=True)
-        # print(sampled_tasks)
         for task in sampled_tasks:
-            train_task = train_set[task].to(device)  # 训练任务
+            train_task = train_set[task].to(device)
             inner_train_step(model, criterion, optimizer, train_task, inner_iters)
 
         new_weights.append(deepcopy(model.state_dict()))
