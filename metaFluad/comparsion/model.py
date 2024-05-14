@@ -29,9 +29,9 @@ def Liao_feature_engineering(distance_input, seq_input, subtype):  # distance_in
     distance_label = calculate_label(distance_input)
     label = {'label': distance_label}
     label = pd.DataFrame(label)
-    # 生成一个与 distance_input 行数相同的序列，用于新DataFrame的索引
+
     index = pd.Series(np.arange(distance_input.shape[0]))
-    # 蛋白质序列的长度
+
     length = len(seq_input['seq'].iloc[0])
     if subtype == 0:
         columns = list(range(1, 328, 1))

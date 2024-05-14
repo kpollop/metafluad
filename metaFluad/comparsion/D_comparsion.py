@@ -64,9 +64,9 @@ class CNN1(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
+
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
+
         return out
 
 
@@ -103,16 +103,7 @@ class SE_CNN(nn.Module):
         return out
 
 class MultiGAT(torch.nn.Module):
-    """ GATConv
-    in_channels：输入特征的维度，即节点的特征维度；
-    out_channels：输出特征的维度，即经过卷积后每个节点的特征维度；
-    heads：注意力机制中注意力头的数目，默认为 1；
-    concat：是否将每个头的输出拼接起来，默认为 True；
-    negative_slope：LeakyReLU 中负斜率的值，默认为 0.2；
-    dropout：在输出特征上应用 dropout 的概率，默认为 0；
-    bias：是否添加偏置，默认为 True；
-    **kwargs：其他参数，如指定用于计算注意力权重的函数等。
-    """
+
 
     def __init__(self, in_channels,
                  hidden_channels,
@@ -148,29 +139,7 @@ class MultiGAT(torch.nn.Module):
                              )
         self.layerNorm = nn.LayerNorm(out_channels)
 
-    # def Resforward(self, x, edge_index):
-    #     # print("使用有" + str(len(self.convs) + 2) + "层(GATConv)")
-    #     # Apply the input layer.
-    #     input = x
-    #     x = self.conv1(x, edge_index)
-    #     x = F.relu(input + x)
-    #     input = x
-    #     # print(x.shape)
-    #     # x = x + input
-    #     # x = F.dropout(x, p=0.5, training=self.training)
-    #
-    #     # Apply the hidden layers.
-    #     for i in range(self.num_layers - 2):
-    #         print("第{}次卷积后：".format(i) + str(x.shape))
-    #         x = self.convs[i](x, edge_index)
-    #         x = F.relu(x + input)
-    #         input = x
-    #     # Apply the output layer.
-    #     x = self.convN(x, edge_index)
-    #     x = F.relu(x)
-    #     x = x + input
-    #     # print(x.shape)
-    #     return x
+
 
     def forward(self, x, edge_index):
         # print("--------------")

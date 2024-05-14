@@ -23,89 +23,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")  # 有�
 from torch_geometric.data import Data
 
 
-class mytransformer(nn.Module):
-    def __init__(self, emb_dim=256, feat_dim=256, drop_ratio=0.2, pool='add'):
-        super(mytransformer, self).__init__()
-        self.emb_dim = emb_dim
-        self.feat_dim = feat_dim
-        self.drop_ratio = drop_ratio
-        # self.feat_lin = nn.Linear(self.emb_dim, self.feat_dim)
-
-        self.out_lin = nn.Sequential(
-            # nn.Linear(self.feat_dim, self.feat_dim // 2),
-            nn.Linear(self.emb_dim, self.feat_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=0.3),
-            nn.Linear(self.emb_dim, self.feat_dim),
-        )
-        self.conv1d1 = OneDimConvBlock()
-        self.conv1d2 = OneDimConvBlock()
-        self.conv1d3 = OneDimConvBlock()
-        # self.conv1d4 = OneDimConvBlock()
-        # self.conv1d5 = OneDimConvBlock()
-        # self.conv1d6 = OneDimConvBlock()
-        # self.conv1d7 = OneDimConvBlock()
-        # self.conv1d8 = OneDimConvBlock()
-        # self.conv1d9 = OneDimConvBlock()
-        # self.conv1d10 = OneDimConvBlock()
-        # self.conv1d11 = OneDimConvBlock()
-        # self.conv1d12 = OneDimConvBlock()
-
-        # self.preconcat1 = nn.Linear(2048, 1024)
-        # self.preconcat2 = nn.Linear(1024, self.feat_dim)
-        # self.afterconcat1 = nn.Linear(2 * self.feat_dim, self.feat_dim)
-        # self.after_cat_drop = nn.Dropout(self.drop_ratio)
-
-    def forward(self, data):
-        # print("transformer中 data.shape")
-        # print(data.shape)
-        fringerprint = data.reshape(data.shape[0], -1)
-        # print("fringerprint.shape")
-        # print(fringerprint.shape)
-        # fringerprint = data.fingerprint.reshape(-1, 2048)
-        fringerprint = self.conv1d1(fringerprint)
-        fringerprint = self.conv1d2(fringerprint)
-        fringerprint = self.conv1d3(fringerprint)
-        # fringerprint = self.conv1d4(fringerprint)
-        # fringerprint = self.conv1d5(fringerprint)
-        # fringerprint = self.conv1d6(fringerprint)
-        # fringerprint = self.conv1d7(fringerprint)
-        # fringerprint = self.conv1d8(fringerprint)
-        # fringerprint = self.conv1d9(fringerprint)
-        # fringerprint = self.conv1d10(fringerprint)
-        # fringerprint = self.conv1d11(fringerprint)
-        # fringerprint = self.conv1d12(fringerprint)
-        # fringerprint = self.preconcat1(fringerprint)
-        # fringerprint = self.preconcat2(fringerprint)
-
-        out = self.out_lin(fringerprint)
-        # print(out.shape)
-
-        return out.squeeze()
-        # return out
-
 class TransformerModel(nn.Module):
     def __init__(self, input_dim, hidden_dim,
                  num_layers, num_heads, output_dim):
         super().__init__()
-        #
-        #
-        """
-        编码器   nn.TransformerEncoder
-        encoder_layer：用于构造编码器层的类，默认为 nn.TransformerEncoderLayer。
-        num_layers：编码器层的数量。默认值为 6。
-        norm：归一化模块的类，用于在每个编码器层之间进行归一化，默认为 nn.LayerNorm。
-        batch_first：输入张量是否以 batch 维度为第一维。默认为 False。
-        dropout：每个编码器层输出之前的 dropout 概率。默认值为 0.1
-
-        编码器层  nn.TransformerEncoderLayer
-        d_model：输入特征的维度和输出特征的维度。默认值为 512。
-        nhead：多头注意力的头数。默认值为 8。
-        dim_feedforward：前馈神经网络的隐藏层大小。默认值为 2048。
-        dropout：每个子层输出之前的 dropout 概率。默认值为 0.1。
-        activation：前馈神经网络中使用的激活函数类型。默认值为 'relu'。
-        normalize_before：是否在每个子层之前进行层归一化。默认值为 False。
-        """
         self.transformer_encoder_layer = \
             nn.TransformerEncoderLayer(d_model=input_dim, nhead=num_heads,
                                        dim_feedforward=hidden_dim,
@@ -120,29 +41,13 @@ class TransformerModel(nn.Module):
         self.fc = nn.Linear(input_dim, output_dim)
         self.dropout1 = nn.Dropout(p=0.3)
         self.norm = nn.LayerNorm(output_dim)
-
-    def Resforward(self, x):
-        se = x
-        x = self.transformer(x)
-        x = F.relu(x + se)
-        x = self.transformer(x)
-        # x = x.squeeze(1)  # 去除序列长度为1的维度
-        # x = self.fc(x + se)  # 将Transformer的输出转换为256维向量
-        x = self.dropout1(x)
-        x = self.fc(x)
-        # x = F.relu(x+se)
-        # x = self.fc(x)
-        return x
-
     def forward(self, x):
         input = x
         # x: (batch_size, sequence_length, input_size)
-        x = x.transpose(0, 1)  # 将序列长度放到第一维，变成 (sequence_length, batch_size, input_size)
-        x = self.transformer(x)  # Transformer 编码器
-        x = x.transpose(0, 1)  # 将序列长度放回到第二维，变成 (batch_size, sequence_length, input_size)
+        x = x.transpose(0, 1)  #(sequence_length, batch_size, input_size)
+        x = self.transformer(x)
+        x = x.transpose(0, 1)  # (batch_size, sequence_length, input_size)
         x = F.relu(x + input)
-        # x = x + input
-        # x = self.norm(x)
         return x
 
 class SEBlock1(nn.Module):
@@ -183,9 +88,7 @@ class CNN1(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
         return out
 
 
@@ -206,8 +109,7 @@ class CNN2(nn.Module):
 
         self.conv4 = nn.Conv2d(16, 16, kernel_size=(3, 5), stride=2, padding=2)
         self.bn4 = nn.BatchNorm2d(16)
-        # self.fc = nn.Linear(32 * 8 * 8, out_dim)
-        # self.fc = nn.Linear(32 * 42 * 14, out_dim)
+
         self.fc = nn.Linear(32 * 11 * 16, out_dim)
         # self.fc = nn.Linear(3456, out_dim)
 
@@ -215,49 +117,19 @@ class CNN2(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
+
 
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
 
         out = self.conv3(out)
         out = self.bn3(out)
         out = self.relu(out)
-        #
-        # out = self.conv3(out)
-        # out = self.bn3(out)
-        # out = self.relu(out)
-        # out = self.conv3(out)
-        # out = self.bn3(out)
-        # out = self.relu(out)
-
-        # print(out.shape)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
 
-        # out = self.conv4(out)
-        # out = self.bn4(out)
-        # out = self.relu(out)
-        # #
-        # # out = self.conv3(out)
-        # # out = self.bn3(out)
-        # # out = self.relu(out)
-        # # out = self.conv3(out)
-        # # out = self.bn3(out)
-        # # out = self.relu(out)
-        #
-        # # print(out.shape)
-        # # print("----池化前{}------".format(out.shape))
-        # out = self.pool(out)
-
-        # print(out.shape)
-        # print("-----池化后{}-----".format(out.shape))
 
         out = out.view(out.size(0), -1)
         out = self.fc(out)
@@ -274,14 +146,7 @@ class SECNN(nn.Module):
         self.cnn = CNN2(32, out_dim)
 
     def forward(self, x):
-        # print("-------se_block-------")
-        # print(x.shape)
-        # normalized_shape = (x.size(-1),)
-        # normalized_shape = ((x.size(-1),))
-        # 归一化 后两维
-        # normalized_shape = (327, 100)
-        # layer_norm = torch.nn.LayerNorm(normalized_shape)
-        # x = layer_norm(x)
+
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -381,29 +246,6 @@ class MultiGAT(torch.nn.Module):
                              heads=num_heads)
         self.layerNorm = nn.LayerNorm(out_channels)
 
-    def Resforward(self, x, edge_index):
-        # print("使用有" + str(len(self.convs) + 2) + "层(GATConv)")
-        # Apply the input layer.
-        input = x
-        x = self.conv1(x, edge_index)
-        x = F.relu(input + x)
-        input = x
-        # print(x.shape)
-        # x = x + input
-        # x = F.dropout(x, p=0.5, training=self.training)
-
-        # Apply the hidden layers.
-        for i in range(self.num_layers - 2):
-            print("第{}次卷积后：".format(i) + str(x.shape))
-            x = self.convs[i](x, edge_index)
-            x = F.relu(x + input)
-            input = x
-        # Apply the output layer.
-        x = self.convN(x, edge_index)
-        x = F.relu(x)
-        x = x + input
-        # print(x.shape)
-        return x
 
     def forward(self, x, edge_index):
         input = x
@@ -424,20 +266,14 @@ class RegressionModel1(nn.Module):
         self.output_dim = output_dim
 
         self.fc1 = nn.Linear(input_dim, reg_hidden_dim, bias=True)
-        # self.fc2 = nn.Linear(reg_hidden_dim, reg_hidden_dim, bias=True)
-        # self.fc3 = nn.Linear(reg_hidden_dim, reg_hidden_dim, bias=True)
+
         self.fc4 = nn.Linear(reg_hidden_dim, output_dim)
         self.dropout1 = nn.Dropout(p=0.5)
-        # self.dropout2 = nn.Dropout(p=0.3)
+
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        # x = F.leaky_relu(self.fc1(x))
-        # # x = F.relu(self.fc1(x))
         x = self.dropout1(x)
-        # x = F.leaky_relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        # x = self.dropout2(x)
         x = self.fc4(x)
         return x
 
@@ -466,69 +302,31 @@ class ConvNet_transformer(nn.Module):
         #                                     4,  # T_num_heads,
         #                                     32  # T_output_dim
         #                                     )
-        # # # self.ResGAT = MultiGAT_m(512 // 2, 128 // 2, 128 // 2, 4)
-        # # # self.ResGAT = MultiGAT_m(512, 128, 128, 4)
-        # # # self.layernormal = torch.nn.LayerNorm(T_output_dim)
-        # # self.ResGAT = MultiGAT(512, 128, 128, 4, 2, concat='True')
-        # self.ResGAT = MultiGAT(cnn_outdim, 128 // 2, 128 // 2, 4, 2, concat='True')
-        self.ResGAT1 = GraphSAGE1(256, 256, 256, 2, aggr='mean')
-        # self.ResGAT = MultiGAT(512 // 4, 128 // 4, 128 // 4, 4, 3, concat='True')
-        # self.layernormal2 = torch.nn.LayerNorm(1024)
-        # self.layernormal = torch.nn.LayerNorm(512)
-        # self.layernormal2 = torch.nn.LayerNorm(512)
-        self.regression = RegressionModel1(1024, 512, 1)  # 回归层
-        # self.transformer1 = TransformerModel1(100, 200, 4, 256)
-        # self.regression = RegressionModel1(512, 128, 1)  # 回归层
+        self.ResGAT = MultiGAT(cnn_outdim, 128 // 2, 128 // 2, 4, 2, concat='True')
+        # self.ResGAT1 = GraphSAGE1(256, 256, 256, 2, aggr='mean')
+
+        self.regression = RegressionModel1(1024, 512, 1)  #
+
 
     def forward(self, data):
-        # x_t1 = self.transformer1(data.x.squeeze(1))
-        # print(x_t1.shape)
-        # print("data.x.shape")
-        # 1DConvNet
-        # x = self.Con1D(data.x)
-
-        # 2DConvNet
-        # x = self.convnet(data.x)
-
-        # CNNWithResidual
-        # x = self.CNN(data.x)
-
-        # x = self.SEB(data.x)
-
-        # x = self.convnet(data.x)
-        # print("-------------------data.x.shape")
-        # print(data.x.shape)
         x = self.SE_CNN(data.x)
 
         x_t = self.transformer(x.unsqueeze(1)).squeeze(1)
 
         data_x = x.squeeze(1)
 
-        # 提取序列特征
-        # x_t = self.transformer(x)
-
-        # 提取图结构特征
         x_r = self.ResGAT1(data_x, data.edge_index)
 
-        # x = self.layernormal(x)
 
-        #  拼接transformer和GAT的结果
-        # x = torch.cat((x_t1.squeeze(1), x_r), dim=1)
         x = torch.cat((x_t.squeeze(1), x_r), dim=1)
-        # x = self.layernormal(x)
+
         m = x
         x, n = create(x, data.edge_index, data.edge_index.shape[1])
-        # print("拼接后特征数量{}".format(x.shape))
-        # x = self.layernormal2(x)
 
-        ypre = self.regression(x)  # 预测结果
-        # # print("yerd是{}".format(ypre))
-        # # print("ypre.shape")
-        # # print(ypre.shape)
-        # data.x = x.unsqueeze(1)
+        ypre = self.regression(x)
         # print(data.x.shape)
         return ypre, x
-        # return x
+
 
 
 def to_tensor(x, l=False):
@@ -552,34 +350,20 @@ def inner_train_step(model, criterion, optimizer, train, inner_iters):
         optimizer.zero_grad()
         model.train()
         ypred, x = model(train)
-        # ypred = ypred.squeeze(1)
-        # matrix_a = x[:, :512]
-        # # print(matrix_a.shape)
-        # matrix_b = x[:, 512:]
-        # # print(matrix_b.shape)
-        # # 计算欧几里得距离
-        # distances = torch.sqrt(torch.sum((matrix_a - matrix_b) ** 2, dim=1)).unsqueeze(1)
-        # distances = train.edge_weight - distances
-        # # distances = data_train.edge_weight - distances
-        #
-        # # 计算平均距离
-        # mean_distance = torch.mean(distances)
-        # loss = criterion(ypred, train.edge_weight) + lambd1 * mean_distance
+
         loss = criterion(ypred, train.edge_weight)
-        # if log: print loss.data[0]
         loss.backward()
         optimizer.step()
 
 
 def meta_train_step(train_set, model, criterion, optimizer,
-                    # 内循环批次大小
-                    inner_iters,  # 内循环迭代次数
-                    meta_step_size,  #
-                    meta_batch_size):  # 外循环批次大小
+                    inner_iters,  # Number of iterations in the inner loop
+                    meta_step_size,  # Learning rate for meta update
+                    meta_batch_size):  # Batch size for the outer loop
     """
     Meta training step procedure.
     """
-    # 拷贝参数用于参数更新
+    # Copy parameters for parameter update
     weights_original = deepcopy(model.state_dict())
     new_weights = []
     for _ in range(len(train_set)):
@@ -593,7 +377,6 @@ def meta_train_step(train_set, model, criterion, optimizer,
         new_weights.append(deepcopy(model.state_dict()))
         model.load_state_dict({name: weights_original[name] for name in weights_original})
 
-    # 参数更新
     ws = len(new_weights)
     fweights = {name: new_weights[0][name] / float(ws) for name in new_weights[0]}
     for i in range(1, ws):
@@ -617,8 +400,6 @@ def evaluate(val_set, model, criterion):
             evaluate = val_set[i].to(device)
             ypred, _ = model(evaluate)
             # ypred = ypred.squeeze(1)
-            print("预测:{}".format(ypred[:10].reshape(1, -1)))
-            print("真实{}".format(evaluate.edge_weight[:10].reshape(1, -1)))
             mse_loss += criterion(ypred, evaluate.edge_weight)
             mae_loss += F.l1_loss(ypred, evaluate.edge_weight)
         mse_loss = mse_loss / len(val_set)
@@ -662,7 +443,6 @@ def train(train_set, val_set, test_data, model, criterion, optimizer, inner_iter
 
         if i % 100 == 0:
             print("=========================")
-            print("test_task微调")
             evaluate_task(test_data, model, criterion, optimizer)
 
             # model_save1 = './data/result/metalearn/metalearn_model{}.pth'.format(i)
@@ -706,27 +486,26 @@ def main():
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
 
-    # 作用是确保在使用CuDNN时的计算结果是确定性的，即相同的输入和参数会产生相同的输出。
+    # This ensures that when using CuDNN, the computational results are deterministic,
+    # meaning that the same inputs and parameters will produce the same outputs.
     torch.backends.cudnn.deterministic = True
-    # 作用是禁用CuDNN的自动调优功能。
+    # This disables the automatic tuning feature of CuDNN.
     torch.backends.cudnn.benchmark = False
 
-    lr = 0.001
-    initial_lr = 0.0001
-    # 初始学习率
-    decay_factor = 0.9  # 学习率衰减因子
-    decay_steps = 100  # 学习率衰减步数
+    initial_lr = 0.0001  # Initial learning rate
+
+    decay_factor = 0.9  # Learning rate decay factor
+    decay_steps = 100  # Steps for learning rate decay
     model = ConvNet_transformer(cnn_outdim=256).to(device)
-    printparm(model)
     criterion = nn.MSELoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=initial_lr, weight_decay=0.0002)
-    lr = StepLR(optimizer, step_size=decay_steps, gamma=decay_factor)
+    # lr = StepLR(optimizer, step_size=decay_steps, gamma=decay_factor)
 
-    inner_iters = 4  # 原代码使用批次,只更新一次
-    meta_iters = 1001  # 源代码400000次
+    inner_iters = 4
+    meta_iters = 1001
     meta_step_size = 0.001
     meta_batch_size = 1
-    eval_interval = 40
+    # eval_interval = 40
 
     data_list = []
 
@@ -770,8 +549,6 @@ def main():
     print("+++++++++")
     print(train_data)
     print("+++++++++")
-    # print(val_data)
-    # 测试数据
     print("test=============================test")
     # path = 'data/meta_traindata/AH1N1_graph.csv'
     # path = 'data/meta_traindata/AH5N1-2_graph.csv'
@@ -790,10 +567,10 @@ def main():
           val_data,
           test_data,
           model,
-          criterion,  # 损失函数
-          optimizer,  # 优化器
-          inner_iters,  # 内部更新次数
-          meta_iters,  # 迭代次数
+          criterion,  # Loss function
+          optimizer,  # Optimizer
+          inner_iters,  # Number of inner updates
+          meta_iters,  # Number of iterations
           meta_step_size,
           meta_batch_size
           )
@@ -821,7 +598,6 @@ def evaluate_task(test_data, model, criterion, optimizer):
         loss.backward()
         optimizer.step()
         if i % 100 == 0:
-            print("微调{}".format(i))
             print("test_data ==> loss = {}".format(loss))
             print("test_data ==> rmse = {}".format(torch.sqrt(loss)))
             print(pred[:10].reshape(1, -1))

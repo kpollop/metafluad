@@ -56,12 +56,12 @@ class RESGATv2(nn.Module):
         self.dropout = dropout
 
         self.gat_layers = nn.ModuleList()
-        # 第一层GAT
+
         self.gat_layers.append(GATv2Conv(in_features, hidden_features, heads=num_heads[0]))
-        # 中间层GAT
+
         for l in range(1, num_layers - 1):
             self.gat_layers.append(GATv2Conv(hidden_features * num_heads[l - 1], hidden_features, heads=num_heads[l]))
-        # 输出层GAT
+
         self.gat_layers.append(GATv2Conv(hidden_features * num_heads[-2], out_features, heads=num_heads[-1]))
 
         self.residual_layer = nn.Linear(in_features, out_features * num_heads[-1])
@@ -73,29 +73,15 @@ class RESGATv2(nn.Module):
             x = layer(x, edge_index).flatten(1)
             x = F.elu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
-        # 最后一层GAT
+
         x = self.gat_layers[-1](x, edge_index).flatten(1)
         x = F.elu(x)
-        # x = F.dropout(x, p=self.dropout, training=self.training)
-        # print(x.shape)
-        # 残差连接
-        # x_res = self.residual_layer(x)
-        # print(x_res.shape)
+
         x = F.relu(x + x_res)
         return x
 
 
 class MultiGAT(torch.nn.Module):
-    """ GATConv
-    in_channels：输入特征的维度，即节点的特征维度；
-    out_channels：输出特征的维度，即经过卷积后每个节点的特征维度；
-    heads：注意力机制中注意力头的数目，默认为 1；
-    concat：是否将每个头的输出拼接起来，默认为 True；
-    negative_slope：LeakyReLU 中负斜率的值，默认为 0.2；
-    dropout：在输出特征上应用 dropout 的概率，默认为 0；
-    bias：是否添加偏置，默认为 True；
-    **kwargs：其他参数，如指定用于计算注意力权重的函数等。
-    """
 
     def __init__(self, in_channels, hidden_channels, out_channels, num_heads, num_layers, concat='True'):
         super(MultiGAT, self).__init__()

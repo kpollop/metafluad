@@ -67,9 +67,8 @@ class CNN1(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
+
         return out
 
 
@@ -99,49 +98,20 @@ class CNN2(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
+
 
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
-        # print("-----池化后{}-----".format(out.shape))
 
         out = self.conv3(out)
         out = self.bn3(out)
         out = self.relu(out)
-        #
-        # out = self.conv3(out)
-        # out = self.bn3(out)
-        # out = self.relu(out)
-        # out = self.conv3(out)
-        # out = self.bn3(out)
-        # out = self.relu(out)
-
-        # print(out.shape)
-        # print("----池化前{}------".format(out.shape))
         out = self.pool(out)
 
-        # out = self.conv4(out)
-        # out = self.bn4(out)
-        # out = self.relu(out)
-        # #
-        # # out = self.conv3(out)
-        # # out = self.bn3(out)
-        # # out = self.relu(out)
-        # # out = self.conv3(out)
-        # # out = self.bn3(out)
-        # # out = self.relu(out)
-        #
-        # # print(out.shape)
-        # # print("----池化前{}------".format(out.shape))
-        # out = self.pool(out)
 
-        # print(out.shape)
-        # print("-----池化后{}-----".format(out.shape))
 
         out = out.view(out.size(0), -1)
         out = self.fc(out)
@@ -158,14 +128,6 @@ class SECNN(nn.Module):
         self.cnn = CNN2(32, out_dim)
 
     def forward(self, x):
-        # print("-------se_block-------")
-        # print(x.shape)
-        # normalized_shape = (x.size(-1),)
-        # normalized_shape = ((x.size(-1),))
-        # 归一化 后两维
-        # normalized_shape = (327, 100)
-        # layer_norm = torch.nn.LayerNorm(normalized_shape)
-        # x = layer_norm(x)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -193,14 +155,7 @@ class SE_CNN(nn.Module):
         self.fc = nn.Linear(32 * 22 * 8, out_dim)
 
     def forward(self, x):
-        # print("-------se_block-------")
-        # print(x.shape)
-        # normalized_shape = (x.size(-1),)
-        # normalized_shape = ((x.size(-1),))
-        # 归一化 后两维
-        # normalized_shape = (327, 100)
-        # layer_norm = torch.nn.LayerNorm(normalized_shape)
-        # x = layer_norm(x)
+
         x = self.conv1(x)
         # x = self.bn1(x)
         x = self.relu(x)
@@ -237,40 +192,18 @@ class GCN(torch.nn.Module):
         x = self.conv2(x, edge_index)
         return F.relu(x+res)
 
-class AGNNModel(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers):
-        super(AGNNModel, self).__init__()
-        self.conv1 = AGNNConv(requires_grad=True)
-
-        self.convs = nn.ModuleList([
-            AGNNConv(hidden_channels, hidden_channels) for _ in range(num_layers - 2)
-        ])
-
-        self.conv_out = AGNNConv(hidden_channels, out_channels)
-        self.lin = nn.Linear(in_channels, out_channels)
-
-    def forward(self, x, edge_index):
-        res = self.lin(x)
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        for conv in self.convs:
-            x = conv(x, edge_index)
-        x = self.conv_out(x, edge_index)
-        x = F.relu(x + res)
-        return x
-
 class RESGATv2(nn.Module):
     def __init__(self, in_features, hidden_features, out_features, num_layers, num_heads, dropout=0.3):
         super(RESGATv2, self).__init__()
         self.dropout = dropout
 
         self.gat_layers = nn.ModuleList()
-        # 第一层GAT
+
         self.gat_layers.append(GATv2Conv(in_features, hidden_features, heads=num_heads[0]))
-        # 中间层GAT
+
         for l in range(1, num_layers - 1):
             self.gat_layers.append(GATv2Conv(hidden_features * num_heads[l - 1], hidden_features, heads=num_heads[l]))
-        # 输出层GAT
+
         self.gat_layers.append(GATv2Conv(hidden_features * num_heads[-2], out_features, heads=num_heads[-1]))
 
         self.residual_layer = nn.Linear(in_features, out_features * num_heads[-1])
@@ -282,29 +215,15 @@ class RESGATv2(nn.Module):
             x = layer(x, edge_index).flatten(1)
             x = F.elu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
-        # 最后一层GAT
+
         x = self.gat_layers[-1](x, edge_index).flatten(1)
         x = F.elu(x)
-        # x = F.dropout(x, p=self.dropout, training=self.training)
-        # print(x.shape)
-        # 残差连接
-        # x_res = self.residual_layer(x)
-        # print(x_res.shape)
+
         x = F.relu(x + x_res)
         return x
 
 
 class MultiGAT(torch.nn.Module):
-    """ GATConv
-    in_channels：输入特征的维度，即节点的特征维度；
-    out_channels：输出特征的维度，即经过卷积后每个节点的特征维度；
-    heads：注意力机制中注意力头的数目，默认为 1；
-    concat：是否将每个头的输出拼接起来，默认为 True；
-    negative_slope：LeakyReLU 中负斜率的值，默认为 0.2；
-    dropout：在输出特征上应用 dropout 的概率，默认为 0；
-    bias：是否添加偏置，默认为 True；
-    **kwargs：其他参数，如指定用于计算注意力权重的函数等。
-    """
 
     def __init__(self, in_channels, hidden_channels, out_channels, num_heads, num_layers, concat='True'):
         super(MultiGAT, self).__init__()
@@ -347,27 +266,19 @@ class RegressionModel1(nn.Module):
         # self.fc2 = nn.Linear(reg_hidden_dim, reg_hidden_dim, bias=False)
         # self.fc3 = nn.Linear(reg_hidden_dim, reg_hidden_dim, bias=True)
         self.fc4 = nn.Linear(reg_hidden_dim, output_dim)
-        # self.attention = Attention(256, 8, 32, 0.5)
+
         self.dropout1 = nn.Dropout(p=0.5)
-        # self.dropout2 = nn.Dropout(p=0.5)
+
 
     def forward(self, x):
         # x = F.relu(self.fc1(x))
         x = F.leaky_relu(self.fc1(x))
         x = self.dropout1(x)
-        # x = F.leaky_relu(self.fc2(x))
-        # x = self.dropout2(x)
-        # # x = F.relu(self.fc1(x))
 
-        # x = F.leaky_relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        # x = self.dropout2(x)
         x = self.fc4(x)
         return x
 
 
-# 定义1D Transformer模型,在 Transformer 模型中，一般不需要在最后加上全连接层。
-# 这是因为，Transformer 本身已经包含了一个全连接层
 class TransformerModel(nn.Module):
     def __init__(self, input_dim, hidden_dim,
                  num_layers, num_heads, output_dim):
@@ -432,7 +343,6 @@ class TransformerModel(nn.Module):
         return x
 
 
-# 带挤压和激活的CNN块
 class SEBlock(nn.Module):
     def __init__(self, in_channels, reduction_ratio=16):
         super(SEBlock, self).__init__()
@@ -453,16 +363,9 @@ class SEBlock(nn.Module):
 
 class MetaFluAD(nn.Module):
     def __init__(self, cnn_outdim=256):
-        super(ConvNet_transformer, self).__init__()
-        # self.Con1D = ConvNet_1D()
+        super(MetaFluAD, self).__init__()
 
-        # self.CNN = CNNWithResidual(1, 256)
-        # self.SEB = SEBasicBlock(inplanes=1, planes=16)
-        # self.convnet = ConvNet_T(output_dim=512)
         self.SE_CNN = SE_CNN(1, cnn_outdim)
-        # self.SE_CNN = SECNN(1, 128)
-        # self.transformer = mytransformer(256, 256)
-        # self.transformer = Attention(256, 8, 32, 0.5)
         self.transformer = TransformerModel(cnn_outdim,  # T_input_dim,
                                             512,  # T_hidden_dim,
                                             2,  # T_num_layers,
@@ -487,7 +390,7 @@ class MetaFluAD(nn.Module):
         feature = x
         x, n = create(x, data.edge_index, data.edge_index.shape[1])
 
-        ypre = self.regression1(x)  # 预测结果
+        ypre = self.regression1(x)
 
         return ypre, feature
 
@@ -549,22 +452,20 @@ def split_data(select_data):
 
 def load_data(path_edge, path_node):
     df = pd.read_csv(path_edge)
-    # 节点对id
+
     src = torch.Tensor(np.array(df["strainName1"].astype(int).values))
     dst = torch.Tensor(np.array(df["strainName2"].astype(int).values))
 
-    # 边缘
+
     edge_weight = torch.Tensor(df["distance"].values)
 
     edge_index = torch.stack([src, dst]).to(torch.int64)
     edge_index = edge_index.transpose(0, 1)
 
-    # 节点信息
+
     if path_node == "":
         path_node = "../targetdata/tensor/tensor_data_100.npy"
         x = torch.Tensor(np.load(path_node))
-        print("单独卷积")
-    print("节点信息来自{}文件,默认来自../targetdata/tensor/tensor_data_100.npy".format(path_node))
     x = load_vec(path_node)
     print(x.shape)
     data = Data(x=x, edge_index=edge_index.transpose(0, 1), edge_weight=edge_weight)
@@ -573,13 +474,13 @@ def load_data(path_edge, path_node):
 
 def load_vec(HA1_path):
     data = np.genfromtxt(HA1_path, delimiter=' ')
-    name = data[:, 0:1]  # 毒株名
-    vec = data[:, 1:]  # 毒株嵌入，没有卷积过
+    name = data[:, 0:1]
+    vec = data[:, 1:]
     print(vec.shape)
     num = vec.shape[0]
-    vec = vec.reshape(num, 327, 100)  # 253 个 327*100 矩阵
-    vec = torch.FloatTensor(vec)  # 转换为tensor
-    inputs = vec.unsqueeze(1)  #
+    vec = vec.reshape(num, 327, 100)
+    vec = torch.FloatTensor(vec)
+    inputs = vec.unsqueeze(1)
     return inputs
 
 def train_one_epoch(model, optimizer, lr_scheduler, i, epochs, criterion, data_train):
@@ -587,17 +488,6 @@ def train_one_epoch(model, optimizer, lr_scheduler, i, epochs, criterion, data_t
     optimizer.zero_grad()
     output, x = model(data_train)
 
-    # # 计算L2正则化项
-    # regularization_loss = 0
-    # for param in model.parameters():
-    #     regularization_loss += torch.norm(param, p=2)  # 参数的L2范数
-
-    # loss1, loss_t, loss_g = cosloss(x, data_train.edge_weight)
-    # loss = F.mse_loss(output, data_train.edge_weight) * lambd1 + lambd2 * loss_t + lambd3 * loss_g
-
-    # loss_1, loss_2 = myloss1(x, data_train.edge_weight)
-    # loss = criterion(output, data_train.edge_weight) + lambd *norm
-    # loss = criterion(output, data_train.edge_weight) + loss_2 * r2 + loss_1 * r1
     loss = criterion(output, data_train.edge_weight)
     # loss += regularization_loss*lambda_l2
     loss.backward()
@@ -608,13 +498,8 @@ def train_one_epoch(model, optimizer, lr_scheduler, i, epochs, criterion, data_t
         lr = optimizer.param_groups[0]['lr']
         print(f"Epoch {i}, Learning rate: {lr}, Loss: {loss.item()}")
     if i == epochs - 1:
-        model_save = './data/result/metalearn/CW_PYG1_transformer.pth'
+        model_save = './data/result/metalearn/H3N2.pth'
         torch.save(model.state_dict(), model_save)
-        now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        with open(f'./data/result/CSV/节点嵌入{now}.csv', 'w', newline='') as file:
-            writer.writerows(x.tolist())
-        file.close()
-        # pass
     return loss.item(), output
 
 
@@ -655,23 +540,23 @@ def train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_ev
     model.train()
     best_loss = float('inf')
     patience = 80  
-    counter = 40  # 计数器，记录没有下降的轮数
+    counter = 40
     for i in range(epochs):
         train_loss, output_train = train_one_epoch(model, optimizer, lr_scheduler, i, epochs, criterion, data_train)
         # evalue_loss_mse, evalue_loss_mae, output_evalue, rmse, pcc, std, r2 = evaluate(model, data_evaluate)
 
         if train_loss < best_loss:
             best_loss = train_loss
-            counter = 0  # 重置计数器
+            counter = 0
         else:
             counter += 1
-            # 判断是否需要提前停止训练
+            # Determine if early stopping of training is necessary
         if counter >= patience:
             print("Training stopped early due to no improvement in loss.")
             torch.save(model.state_dict(), model_save)
             break
         if (i % 10 == 0):
-            print("第{}轮".format(i))
+            print("Round {}".format(i))
             evalue_loss_mse, evalue_loss_mae, output_evalue, r2 = evaluate(model, data_evaluate)
             if evalue_loss_mse < best_loss:
                 best_loss = evalue_loss_mse
@@ -684,13 +569,13 @@ def train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_ev
                 torch.save(model.state_dict(), model_save)
                 break
             print("R2： " + str(r2))
-            print("训练偏差： " + str(train_loss))
-            print("MSE验证偏差： " + str(evalue_loss_mse))
-            print("MAE验证偏差： " + str(evalue_loss_mae))
+            print("Training bias: " + str(train_loss))
+            print("MSE validation bias: " + str(evalue_loss_mse))
+            print("MAE validation bias: " + str(evalue_loss_mae))
         if (i % 200 == 0):
-            print("打印模型返回值： " + str(output_train[:10].reshape(1, -1)))
+            print(str(output_train[:10].reshape(1, -1)))
             print("-----------------")
-            print("打印真实值：    " + str(data_train.edge_weight[:10].reshape(1, -1)))
+            print(str(data_train.edge_weight[:10].reshape(1, -1)))
         if (i == epochs - 1):
             torch.save(model.state_dict(), model_save)
 
@@ -754,9 +639,9 @@ def sub_evaluate(data):
     print(edge_index.shape)
     edge_weight = data.edge_weight.to(device)
 
+"""
 def selectnodes(data_train):
-    ################################
-    # 指定要删除的节点列表（这里假设要删除的节点为节点0到节点9）
+    
 
     number = 25
     nodes_to_remove = random.sample(range(253), number)
@@ -765,18 +650,18 @@ def selectnodes(data_train):
     # 将PyG Data对象转换为NetworkX图对象
     nx_graph = to_networkx(data_train)
 
-    # 删除指定节点及相关边
+    
     nx_graph.remove_nodes_from(nodes_to_remove)
 
-    # 重新计算剩余节点的映射关系
+  
     node_mapping = {node: idx for idx, node in enumerate(nx_graph.nodes)}
 
-    # 创建子图的边索引和边权重
+   
     subgraph_edge_index = []
     subgraph_edge_weight = []
     subgraph_x = []
 
-    # 遍历原始图的边
+    
     for u, v, w in zip(data_train.edge_index[0], data_train.edge_index[1], data_train.edge_weight):
         u, v = u.item(), v.item()
 
@@ -787,12 +672,12 @@ def selectnodes(data_train):
             subgraph_edge_index.append([u_mapped, v_mapped])
             subgraph_edge_weight.append(w.item())
 
-    # 遍历剩余节点的特征
+    
     for node, idx in node_mapping.items():
         if node not in nodes_to_remove:
             subgraph_x.append(data_train.x[node])
 
-    # 创建子图的Data对象
+    
     subgraph_data = Data(
         x=torch.stack(subgraph_x),
         edge_index=torch.tensor(subgraph_edge_index).t().contiguous(),
@@ -800,15 +685,12 @@ def selectnodes(data_train):
         num_nodes=nx_graph.number_of_nodes()
     ).to(device)
 
-    # 输出子图的节点数量和边的数量
-    print("子图节点数量：", subgraph_data.num_nodes)
-    print("子图边的数量：", subgraph_data.num_edges)
-    print("子图边权重：", subgraph_data.edge_weight)
     ####################3##########3
     subgraph_data.edge_weight = subgraph_data.edge_weight.unsqueeze(1)
 
     return subgraph_data
 
+"""
 
 def main(keep_num_edge):
     initial_lr = 0.0001
@@ -816,7 +698,7 @@ def main(keep_num_edge):
     decay_steps = 100
     epochs = 1601
     model = MetaFluAD()
-    # 加载预训练模型的参数
+    # Load parameters from a pre-trained model
     path = 'data/result/metalearn/AH3N2.pth'
     pretrained_dict = torch.load(path)
     model_dict = model.state_dict()  # 获取当前模型的state_dict
@@ -825,7 +707,6 @@ def main(keep_num_edge):
     model.load_state_dict(model_dict)
     model.to(device)
 
-    printparm(model)
     # optimizer = torch.optim.SGD(model.parameters(), lr=initial_lr, weight_decay=0.02)
     optimizer = torch.optim.Adam(model.parameters(), lr=initial_lr, weight_decay=0.03)
     lr_scheduler = StepLR(optimizer, step_size=decay_steps, gamma=decay_factor)
@@ -860,9 +741,7 @@ def main(keep_num_edge):
     criterion = nn.MSELoss()
     train(model, criterion, optimizer, lr_scheduler, epochs, data_train, data_evaluate)
     test_loss_mse, test_loss_mae, r2 = test(model_save, data_test, model)
-    print("=================================================================")
-    print("所有测试平均mae: {}".format(test_loss_mae))
-    print("=================================================================")
+
 
 if __name__ == '__main__':
     seed = 222
@@ -871,9 +750,7 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
 
-    # 作用是确保在使用CuDNN时的计算结果是确定性的，即相同的输入和参数会产生相同的输出。
     torch.backends.cudnn.deterministic = True
-    # 作用是禁用CuDNN的自动调优功能。
     torch.backends.cudnn.benchmark = False
 
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")  # 有没有GPU
